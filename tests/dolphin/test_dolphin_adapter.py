@@ -42,9 +42,8 @@ class TestDolphinAdapterWithMocks(unittest.TestCase):
         
         self.assertIn("Failed to create virtual gamepad", str(context.exception))
     
-    @patch('emulator_adapter.adapters.dolphin_adapter.time')
     @patch('emulator_adapter.adapters.dolphin_adapter.vg')
-    def test_dolphin_send_input_button_press(self, mock_vg, mock_time):
+    def test_dolphin_send_input_button_press(self, mock_vg):
         """Test sending a button press input"""
         # Setup mocks
         mock_gamepad = MagicMock()
@@ -54,25 +53,21 @@ class TestDolphinAdapterWithMocks(unittest.TestCase):
         adapter = DolphinAdapter()
         adapter.connect()
         
-        # Send input
-        test_input = InputEvent(button="CROSS", action="press")
+        # Send input - button press
+        test_input = InputEvent(type="BUTTON", control="CROSS", pressed=True)
         adapter.send_input(test_input)
         
-        # Verify button was pressed and released
-        mock_gamepad.press_button.assert_called_once_with(button="CROSS_BUTTON")
-        mock_gamepad.release_button.assert_called_once_with(button="CROSS_BUTTON")
+        # Verify button was pressed
+        mock_gamepad.press_button.assert_called_once_with("CROSS_BUTTON")
         
-        # Verify update was called twice (after press and after release)
-        self.assertEqual(mock_gamepad.update.call_count, 2)
-        
-        # Verify sleep was called for button hold
-        mock_time.sleep.assert_called_once_with(.1)
+        # Verify update was called once (after press)
+        self.assertEqual(mock_gamepad.update.call_count, 1)
     
     @patch('emulator_adapter.adapters.dolphin_adapter.vg')
-    def test_dolphin_send_input_without_connection(self):
+    def test_dolphin_send_input_without_connection(self, mock_vg):
         """Test that send_input fails when not connected"""
         adapter = DolphinAdapter()
-        test_input = InputEvent(button="CROSS", action="press")
+        test_input = InputEvent(type="BUTTON", control="CROSS", pressed=True)
         
         with self.assertRaises(RuntimeError) as context:
             adapter.send_input(test_input)
@@ -88,7 +83,7 @@ class TestDolphinAdapterWithMocks(unittest.TestCase):
         adapter = DolphinAdapter()
         adapter.connect()
         
-        invalid_input = InputEvent(button="INVALID_BUTTON", action="press")
+        invalid_input = InputEvent(type="BUTTON", control="INVALID_BUTTON", pressed=True)
         
         with self.assertRaises(ValueError) as context:
             adapter.send_input(invalid_input)
@@ -112,12 +107,11 @@ class TestDolphinAdapterWithMocks(unittest.TestCase):
         # Send multiple inputs
         buttons = ["CROSS", "CIRCLE", "TRIANGLE"]
         for button in buttons:
-            test_input = InputEvent(button=button, action="press")
+            test_input = InputEvent(type="BUTTON", control=button, pressed=True)
             adapter.send_input(test_input)
         
-        # Verify each button was pressed and released
+        # Verify each button was pressed
         self.assertEqual(mock_gamepad.press_button.call_count, 3)
-        self.assertEqual(mock_gamepad.release_button.call_count, 3)
     
     @patch('emulator_adapter.adapters.dolphin_adapter.vg')
     def test_dolphin_button_case_insensitivity(self, mock_vg):
@@ -130,11 +124,11 @@ class TestDolphinAdapterWithMocks(unittest.TestCase):
         adapter.connect()
         
         # Test lowercase button name
-        test_input = InputEvent(button="cross", action="press")
+        test_input = InputEvent(type="BUTTON", control="cross", pressed=True)
         adapter.send_input(test_input)
         
         # Verify it was processed correctly
-        mock_gamepad.press_button.assert_called_once_with(button="CROSS_BUTTON")
+        mock_gamepad.press_button.assert_called_once_with("CROSS_BUTTON")
     
     @patch('emulator_adapter.adapters.dolphin_adapter.vg')
     def test_dolphin_disconnect(self, mock_vg):
@@ -152,7 +146,7 @@ class TestDolphinAdapterWithMocks(unittest.TestCase):
         self.assertFalse(adapter.connected)
     
     @patch('emulator_adapter.adapters.dolphin_adapter.vg')
-    def test_dolphin_disconnect_when_not_connected(self):
+    def test_dolphin_disconnect_when_not_connected(self, mock_vg):
         """Test that disconnect is safe when not connected"""
         adapter = DolphinAdapter()
         # Should not raise an error
@@ -211,12 +205,237 @@ class TestDolphinAdapterWithMocks(unittest.TestCase):
         
         for button in supported_buttons:
             mock_gamepad.reset_mock()  # Clear previous calls
-            test_input = InputEvent(button=button, action="press")
+            test_input = InputEvent(type="BUTTON", control=button, pressed=True)
             adapter.send_input(test_input)
             
             # Verify button was pressed
             self.assertEqual(mock_gamepad.press_button.call_count, 1)
-            self.assertEqual(mock_gamepad.release_button.call_count, 1)
+    
+    @patch('emulator_adapter.adapters.dolphin_adapter.vg')
+    def test_button_release(self, mock_vg):
+        """Test button release functionality"""
+        mock_gamepad = MagicMock()
+        mock_vg.VDS4Gamepad.return_value = mock_gamepad
+        mock_vg.DS4_BUTTONS.DS4_BUTTON_CROSS = "CROSS_BUTTON"
+        
+        adapter = DolphinAdapter()
+        adapter.connect()
+        
+        # Send button release
+        test_input = InputEvent(type="BUTTON", control="CROSS", pressed=False)
+        adapter.send_input(test_input)
+        
+        # Verify button was released
+        mock_gamepad.release_button.assert_called_once_with("CROSS_BUTTON")
+        mock_gamepad.update.assert_called_once()
+    
+    @patch('emulator_adapter.adapters.dolphin_adapter.vg')
+    def test_stick_input(self, mock_vg):
+        """Test analog stick input"""
+        mock_gamepad = MagicMock()
+        mock_vg.VDS4Gamepad.return_value = mock_gamepad
+        
+        adapter = DolphinAdapter()
+        adapter.connect()
+        
+        # Test left stick
+        test_input = InputEvent(type="STICK", control="LEFT_STICK", value_x=0.5, value_y=-0.75)
+        adapter.send_input(test_input)
+        
+        # Verify stick was moved (values should be scaled to -32767 to 32767)
+        expected_x = int(0.5 * 32767)
+        expected_y = int(-0.75 * 32767)
+        mock_gamepad.left_joystick.assert_called_once_with(x_value=expected_x, y_value=expected_y)
+        mock_gamepad.update.assert_called_once()
+    
+    @patch('emulator_adapter.adapters.dolphin_adapter.vg')
+    def test_right_stick_input(self, mock_vg):
+        """Test right analog stick input"""
+        mock_gamepad = MagicMock()
+        mock_vg.VDS4Gamepad.return_value = mock_gamepad
+        
+        adapter = DolphinAdapter()
+        adapter.connect()
+        
+        # Test right stick
+        test_input = InputEvent(type="STICK", control="RIGHT_STICK", value_x=-0.3, value_y=0.9)
+        adapter.send_input(test_input)
+        
+        # Verify stick was moved
+        expected_x = int(-0.3 * 32767)
+        expected_y = int(0.9 * 32767)
+        mock_gamepad.right_joystick.assert_called_once_with(x_value=expected_x, y_value=expected_y)
+        mock_gamepad.update.assert_called_once()
+    
+    @patch('emulator_adapter.adapters.dolphin_adapter.vg')
+    def test_invalid_stick(self, mock_vg):
+        """Test that invalid stick names raise ValueError"""
+        mock_gamepad = MagicMock()
+        mock_vg.VDS4Gamepad.return_value = mock_gamepad
+        
+        adapter = DolphinAdapter()
+        adapter.connect()
+        
+        invalid_input = InputEvent(type="STICK", control="INVALID_STICK", value_x=0.5, value_y=0.5)
+        
+        with self.assertRaises(ValueError) as context:
+            adapter.send_input(invalid_input)
+        
+        self.assertIn("Invalid stick", str(context.exception))
+    
+    @patch('emulator_adapter.adapters.dolphin_adapter.vg')
+    def test_trigger_input(self, mock_vg):
+        """Test trigger input"""
+        mock_gamepad = MagicMock()
+        mock_vg.VDS4Gamepad.return_value = mock_gamepad
+        
+        adapter = DolphinAdapter()
+        adapter.connect()
+        
+        # Test L2 trigger
+        test_input = InputEvent(type="TRIGGER", control="L2", value_x=0.6)
+        adapter.send_input(test_input)
+        
+        # Verify trigger was pressed (values should be scaled to 0 to 255)
+        expected_value = int(0.6 * 255)
+        mock_gamepad.left_trigger.assert_called_once_with(expected_value)
+        mock_gamepad.update.assert_called_once()
+    
+    @patch('emulator_adapter.adapters.dolphin_adapter.vg')
+    def test_right_trigger_input(self, mock_vg):
+        """Test R2 trigger input"""
+        mock_gamepad = MagicMock()
+        mock_vg.VDS4Gamepad.return_value = mock_gamepad
+        
+        adapter = DolphinAdapter()
+        adapter.connect()
+        
+        # Test R2 trigger
+        test_input = InputEvent(type="TRIGGER", control="R2", value_x=1.0)
+        adapter.send_input(test_input)
+        
+        # Verify trigger was pressed
+        expected_value = int(1.0 * 255)
+        mock_gamepad.right_trigger.assert_called_once_with(expected_value)
+        mock_gamepad.update.assert_called_once()
+    
+    @patch('emulator_adapter.adapters.dolphin_adapter.vg')
+    def test_invalid_trigger(self, mock_vg):
+        """Test that invalid trigger names raise ValueError"""
+        mock_gamepad = MagicMock()
+        mock_vg.VDS4Gamepad.return_value = mock_gamepad
+        
+        adapter = DolphinAdapter()
+        adapter.connect()
+        
+        invalid_input = InputEvent(type="TRIGGER", control="L3", value_x=0.5)
+        
+        with self.assertRaises(ValueError) as context:
+            adapter.send_input(invalid_input)
+        
+        self.assertIn("Invalid trigger", str(context.exception))
+    
+    @patch('emulator_adapter.adapters.dolphin_adapter.vg')
+    def test_dpad_input(self, mock_vg):
+        """Test D-pad input"""
+        mock_gamepad = MagicMock()
+        mock_vg.VDS4Gamepad.return_value = mock_gamepad
+        mock_vg.DS4_DPAD_DIRECTIONS.DS4_BUTTON_DPAD_NORTH = "DPAD_NORTH"
+        
+        adapter = DolphinAdapter()
+        adapter.connect()
+        
+        # Test D-pad up
+        test_input = InputEvent(type="DPAD", control="DPAD_UP", pressed=True)
+        adapter.send_input(test_input)
+        
+        # Verify D-pad was pressed
+        mock_gamepad.directional_pad.assert_called_once_with("DPAD_NORTH")
+        mock_gamepad.update.assert_called_once()
+    
+    @patch('emulator_adapter.adapters.dolphin_adapter.vg')
+    def test_dpad_release(self, mock_vg):
+        """Test D-pad release (neutral position)"""
+        mock_gamepad = MagicMock()
+        mock_vg.VDS4Gamepad.return_value = mock_gamepad
+        mock_vg.DS4_DPAD_DIRECTIONS.DS4_BUTTON_DPAD_NONE = "DPAD_NONE"
+        
+        adapter = DolphinAdapter()
+        adapter.connect()
+        
+        # Test D-pad release
+        test_input = InputEvent(type="DPAD", control="DPAD_UP", pressed=False)
+        adapter.send_input(test_input)
+        
+        # Verify D-pad was set to neutral
+        mock_gamepad.directional_pad.assert_called_once_with("DPAD_NONE")
+        mock_gamepad.update.assert_called_once()
+    
+    @patch('emulator_adapter.adapters.dolphin_adapter.vg')
+    def test_all_dpad_directions(self, mock_vg):
+        """Test all D-pad directions"""
+        mock_gamepad = MagicMock()
+        mock_vg.VDS4Gamepad.return_value = mock_gamepad
+        
+        # Setup D-pad direction mocks
+        mock_vg.DS4_DPAD_DIRECTIONS.DS4_BUTTON_DPAD_NORTH = "DPAD_NORTH"
+        mock_vg.DS4_DPAD_DIRECTIONS.DS4_BUTTON_DPAD_SOUTH = "DPAD_SOUTH"
+        mock_vg.DS4_DPAD_DIRECTIONS.DS4_BUTTON_DPAD_WEST = "DPAD_WEST"
+        mock_vg.DS4_DPAD_DIRECTIONS.DS4_BUTTON_DPAD_EAST = "DPAD_EAST"
+        
+        adapter = DolphinAdapter()
+        adapter.connect()
+        
+        # Test all D-pad directions
+        directions = [
+            ("DPAD_UP", "DPAD_NORTH"),
+            ("DPAD_DOWN", "DPAD_SOUTH"),
+            ("DPAD_LEFT", "DPAD_WEST"),
+            ("DPAD_RIGHT", "DPAD_EAST")
+        ]
+        
+        for control, expected_direction in directions:
+            mock_gamepad.reset_mock()
+            test_input = InputEvent(type="DPAD", control=control, pressed=True)
+            adapter.send_input(test_input)
+            
+            # Verify correct direction was pressed
+            mock_gamepad.directional_pad.assert_called_once_with(expected_direction)
+    
+    @patch('emulator_adapter.adapters.dolphin_adapter.vg')
+    def test_invalid_dpad_direction(self, mock_vg):
+        """Test that invalid D-pad directions raise ValueError"""
+        mock_gamepad = MagicMock()
+        mock_vg.VDS4Gamepad.return_value = mock_gamepad
+        
+        adapter = DolphinAdapter()
+        adapter.connect()
+        
+        invalid_input = InputEvent(type="DPAD", control="DPAD_CENTER", pressed=True)
+        
+        with self.assertRaises(ValueError) as context:
+            adapter.send_input(invalid_input)
+        
+        self.assertIn("Invalid D-pad direction", str(context.exception))
+    
+    @patch('emulator_adapter.adapters.dolphin_adapter.vg')
+    def test_unknown_input_type(self, mock_vg):
+        """Test that unknown input types raise ValueError"""
+        mock_gamepad = MagicMock()
+        mock_vg.VDS4Gamepad.return_value = mock_gamepad
+        
+        adapter = DolphinAdapter()
+        adapter.connect()
+        
+        # Create an invalid input event (this requires bypassing type checking)
+        invalid_input = InputEvent.__new__(InputEvent)
+        invalid_input.type = "UNKNOWN"
+        invalid_input.control = "TEST"
+        
+        with self.assertRaises(ValueError) as context:
+            adapter.send_input(invalid_input)
+        
+        self.assertIn("Unknown input type", str(context.exception))
 
 
 if __name__ == '__main__':

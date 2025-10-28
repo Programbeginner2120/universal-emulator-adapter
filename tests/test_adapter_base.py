@@ -94,7 +94,7 @@ class TestConcreteAdapterWithMocks(unittest.TestCase):
     
     def test_send_input_requires_connection(self):
         """Test that send_input raises error when not connected"""
-        test_input = InputEvent(button="CROSS", action="press")
+        test_input = InputEvent(type="BUTTON", control="CROSS", pressed=True)
         
         with self.assertRaises(RuntimeError) as context:
             self.adapter.send_input(test_input)
@@ -104,7 +104,7 @@ class TestConcreteAdapterWithMocks(unittest.TestCase):
     def test_send_input_when_connected(self):
         """Test that send_input works when connected"""
         self.adapter.connect()
-        test_input = InputEvent(button="CROSS", action="press")
+        test_input = InputEvent(type="BUTTON", control="CROSS", pressed=True)
         
         # Should not raise an error
         self.adapter.send_input(test_input)

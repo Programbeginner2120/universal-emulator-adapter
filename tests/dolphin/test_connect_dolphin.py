@@ -9,7 +9,7 @@ def test_dolphin_connection():
         print("[OK] Connected successfully")
 
         # Optional: send a dummy input (e.g., press 'CROSS')
-        test_input = InputEvent(button="OPTIONS", action="press")
+        test_input = InputEvent(type="BUTTON", control="OPTIONS", pressed=True)
         adapter.send_input(test_input)
         print("[OK] Input sent successfully")
 
