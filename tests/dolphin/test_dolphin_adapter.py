@@ -242,9 +242,9 @@ class TestDolphinAdapterWithMocks(unittest.TestCase):
         test_input = InputEvent(type="STICK", control="LEFT_STICK", value_x=0.5, value_y=-0.75)
         adapter.send_input(test_input)
         
-        # Verify stick was moved (values should be scaled to -32767 to 32767)
-        expected_x = int(0.5 * 32767)
-        expected_y = int(-0.75 * 32767)
+        # Verify stick was moved (values should be scaled to -255 to 255)
+        expected_x = int(0.5 * 255)
+        expected_y = int(-0.75 * 255)
         mock_gamepad.left_joystick.assert_called_once_with(x_value=expected_x, y_value=expected_y)
         mock_gamepad.update.assert_called_once()
     
@@ -262,8 +262,8 @@ class TestDolphinAdapterWithMocks(unittest.TestCase):
         adapter.send_input(test_input)
         
         # Verify stick was moved
-        expected_x = int(-0.3 * 32767)
-        expected_y = int(0.9 * 32767)
+        expected_x = int(-0.3 * 255)
+        expected_y = int(0.9 * 255)
         mock_gamepad.right_joystick.assert_called_once_with(x_value=expected_x, y_value=expected_y)
         mock_gamepad.update.assert_called_once()
     
