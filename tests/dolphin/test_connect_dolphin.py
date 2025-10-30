@@ -13,7 +13,17 @@ def test_dolphin_connection():
         time.sleep(3)
 
         test_press_input = InputEvent(type="STICK", control="LEFT_STICK", value_x=0, value_y=0)
-        adapter.send_input(test_press_input, input_callback_dict={"input_duration": 5, "input_release_event": InputEvent(type="STICK", control="LEFT_STICK", value_x=.5, value_y=.5)})
+        adapter.send_input(test_press_input)
+
+        time.sleep(.5)
+
+        test_press_input_2 = InputEvent(type="STICK", control="LEFT_STICK", value_x=1, value_y=1)
+        adapter.send_input(test_press_input_2)
+
+        time.sleep(.5)
+
+        test_release_input = InputEvent(type="STICK", control="LEFT_STICK", value_x=.5, value_y=.5)
+        adapter.send_input(test_release_input)
 
         print("[OK] Input sent successfully")
 

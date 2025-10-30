@@ -7,7 +7,7 @@ class EmulatorAdapter(ABC):
         pass
 
     @abstractmethod
-    def send_input(self, input_event, *args, **kwargs):
+    def send_input(self, input_event):
         """Send an input event (button/axis) to the emulator"""
         pass
 
