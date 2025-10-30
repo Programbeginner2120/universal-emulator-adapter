@@ -1,7 +1,0 @@
-Metadata-Version: 2.1
-Name: emulator_adapter
-Version: 0.1.0
-Summary: Universal adapter for connecting to various game emulators
-Author: Your Name
-Requires-Python: >=3.7
-Requires-Dist: vgamepad
